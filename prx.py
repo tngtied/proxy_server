@@ -7,6 +7,8 @@ port = int(sys.argv[1])
 
 class myPrx(BaseHTTPRequestHandler):
     request_count = 0
+    # def send_response(self, code, message=None):
+    #     pass
 
     def do_GET(self):
         self.__class__.request_count += 1
@@ -17,40 +19,32 @@ class myPrx(BaseHTTPRequestHandler):
 
         if ("korea" in self.path):
             korFlag = True
-            SRV_path = "http://mnet.yonsei.ac.kr/"
+            parsed_url = urlparse("http://mnet.yonsei.ac.kr/")
         else:
-            SRV_path = self.path
-        splitted_path = self.path.split("?")
-        if (splitted_path[-1] == "image_off"):
+            parsed_url = urlparse(self.path)
+
+        if (parsed_url.query == "image_off"):
             imgFlag = True
-            SRV_path = ""
-            for i in range(len(splitted_path) - 1):
-                 SRV_path += splitted_path[i]
 
         print("%d [%c] Redirected [%c] Image filter" % (self.__class__.request_count, ("O" if korFlag else "X"), ("O" if imgFlag else "X")))
 
         client_ip, client_port = self.client_address
         print(f"[CLI connected to {client_ip}:{client_port}]")
         print("[CLI ==> PRX --- SRV]")
-        requestLines = self.requestline.split()
-        print("  > %s %s" % (requestLines[0], requestLines[1]))
-        print("  > %s" % (self.headers['User-Agent']))
-
-        SRV_domain = SRV_path.split("/")[2]
-        SRV_conn = HTTPConnection(SRV_domain, 80)
-        print("[SRV connected to %s:%d]" % (SRV_domain, SRV_conn.port))
+        print("  > %s" % (self.requestline))
+        print("  > %s" % (self.headers['User-Agent'].splitlines()[0]))
+        SRV_conn = HTTPConnection(parsed_url.hostname)
+        print("[SRV connected to %s:%d]" % (parsed_url.hostname, SRV_conn.port))
 
         print("[CLI --- PRX ==> SRV]")
-        SRV_conn.putrequest('GET', SRV_path)
+        SRV_conn.putrequest('GET', parsed_url.path)
         SRV_conn.putheader('Accept', 'text/html')
         # SRV_conn.putheader('Content-Length', str(0))
         # SRV_conn.putheader("Host", SRV_domain)
         SRV_conn.putheader("Connection", "close")
         SRV_conn.putheader("User-Agent", self.headers['User-Agent'])
-        if (imgFlag):
-             SRV_conn.putheader('Content-Security-Policy', "default-src 'self'; img-src 'none';")
-        print("  > GET %s" % (SRV_path))
-        print("  > %s" % (self.headers['User-Agent']))
+        print("  > %s" % (parsed_url.hostname + parsed_url.path))
+        print("  > %s" % (self.headers['User-Agent'].splitlines()[0]))
         SRV_conn.endheaders()
 
         print("[CLI --- PRX <== SRV]")
@@ -58,37 +52,35 @@ class myPrx(BaseHTTPRequestHandler):
             SRV_res = SRV_conn.getresponse()
         except Exception as e:
             print(f"An error occurred: {e}")
-        finally:
-            print("getresponse() itself ran")
         print("  > %s %s" % (SRV_res.status, SRV_res.reason))
-        print("  > %s %sbytes" % (SRV_res.headers['Content-Type'], SRV_res.headers['Content-Length']))
+        print("  > %s %sbytes" % (SRV_res.headers['Content-Type'], (SRV_res.headers['Content-Length'] if SRV_res.headers['Content-Length'] else "0")))
 
 
+        notFoundFlag = False
         print("[CLI <== PRX --- SRV]")
-        self.send_response(SRV_res.status)
+        self.path = parsed_url.hostname + parsed_url.path
+        if (imgFlag and SRV_res.info().get_content_type() == "image/jpeg"):
+            self.send_response_only(404)
+            notFoundFlag = True
+        else:
+            self.send_response_only(SRV_res.status)
         self.send_header('Connection', 'close')
         if (imgFlag):
-             self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'none';")
-        for header, value in SRV_res.getheaders():
-            print("header %s, value %s" % (header, value))
-            self.send_header(header, value)
+            self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'none';")
         self.end_headers()
+        if (not notFoundFlag):
+            self.wfile.write(SRV_res.read())
+        else:
+            self.wfile.write(b"Not Found")
         print("  > %s %s" % (SRV_res.status, SRV_res.reason))
-        print("  > %s %sbytes" % (SRV_res.headers['Content-Type'], SRV_res.headers['Content-Length']))
-        self.wfile.write(SRV_res.read())
+        print("  > %s %sbytes" % (SRV_res.headers['Content-Type'], (SRV_res.headers['Content-Length'] if SRV_res.headers['Content-Length'] else "0")))
 
-
-        # CLI_conn = HTTPConnection(self.path.split("/")[2], client_port)
-        # print("[CLI <== PRX --- SRV]")
-        # CLI_conn.
-        # CLI_res = CLI_conn.getresponse()
+        # self.close_connection = True
         print("[CLI disconnected]")
         SRV_conn.close()
         print("[SRV disconnected]")
 
 try:
-
-    # server.TCPServer.allow_reuse_address = True   # solution for `OSError: [Errno 98] Address already in use`
     print("Starting proxy server on port %d" % port)
     httpd = HTTPServer(('', port), myPrx)
     httpd.allow_reuse_address = True
