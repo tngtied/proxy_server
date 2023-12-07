@@ -12,7 +12,6 @@ class myPrx(BaseHTTPRequestHandler):
         self.__class__.request_count += 1
         print("-----------------------------------------------")
         
-        SRV_header = {'content-type': 'text/html', "Connection" : "close"}
         korFlag = False
         imgFlag = False
 
@@ -24,7 +23,9 @@ class myPrx(BaseHTTPRequestHandler):
         splitted_path = self.path.split("?")
         if (splitted_path[-1] == "image_off"):
             imgFlag = True
-            SRV_header['Content-Security-Policy'] = "default-src 'self'; img-src 'none';"
+            SRV_path = ""
+            for i in range(len(splitted_path) - 1):
+                 SRV_path += splitted_path[i]
 
         print("%d [%c] Redirected [%c] Image filter" % (self.__class__.request_count, ("O" if korFlag else "X"), ("O" if imgFlag else "X")))
 
@@ -36,34 +37,44 @@ class myPrx(BaseHTTPRequestHandler):
         print("  > %s" % (self.headers['User-Agent']))
 
         SRV_domain = SRV_path.split("/")[2]
-        SRV_port = 80
-        SRV_conn = HTTPConnection(SRV_domain, SRV_port)
-        print("[SRV connected to %s:%d]" % (SRV_domain, SRV_port))
+        SRV_conn = HTTPConnection(SRV_domain, 80)
+        print("[SRV connected to %s:%d]" % (SRV_domain, SRV_conn.port))
 
         print("[CLI --- PRX ==> SRV]")
         SRV_conn.putrequest('GET', SRV_path)
-        # SRV_conn.putheader('content-type', 'text/html')
-        SRV_conn.putheader("Host", SRV_domain)
+        SRV_conn.putheader('Accept', 'text/html')
+        # SRV_conn.putheader('Content-Length', str(0))
+        # SRV_conn.putheader("Host", SRV_domain)
         SRV_conn.putheader("Connection", "close")
         SRV_conn.putheader("User-Agent", self.headers['User-Agent'])
+        if (imgFlag):
+             SRV_conn.putheader('Content-Security-Policy', "default-src 'self'; img-src 'none';")
         print("  > GET %s" % (SRV_path))
         print("  > %s" % (self.headers['User-Agent']))
         SRV_conn.endheaders()
 
         print("[CLI --- PRX <== SRV]")
-        SRV_res = SRV_conn.getresponse()
+        try:
+            SRV_res = SRV_conn.getresponse()
+        except Exception as e:
+            print(f"An error occurred: {e}")
+        finally:
+            print("getresponse() itself ran")
         print("  > %s %s" % (SRV_res.status, SRV_res.reason))
-        print("  > %s" % SRV_res.headers['Content-Type'])
+        print("  > %s %sbytes" % (SRV_res.headers['Content-Type'], SRV_res.headers['Content-Length']))
 
 
         print("[CLI <== PRX --- SRV]")
         self.send_response(SRV_res.status)
-        self.send_header('COnnection', 'close')
+        self.send_header('Connection', 'close')
+        if (imgFlag):
+             self.send_header('Content-Security-Policy', "default-src 'self'; img-src 'none';")
         for header, value in SRV_res.getheaders():
-                self.send_header(header, value)
+            print("header %s, value %s" % (header, value))
+            self.send_header(header, value)
         self.end_headers()
         print("  > %s %s" % (SRV_res.status, SRV_res.reason))
-        print("  > %s" % SRV_res.headers['Content-Type'])
+        print("  > %s %sbytes" % (SRV_res.headers['Content-Type'], SRV_res.headers['Content-Length']))
         self.wfile.write(SRV_res.read())
 
 
