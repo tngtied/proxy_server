@@ -2,6 +2,7 @@ import sys
 import socket
 from urllib.parse import urlparse
 import threading
+import zlib
 
 port = int(sys.argv[1])
 imgFlag = False
@@ -22,7 +23,6 @@ def handle_client(CLI_socket, CLI_addr):
     #     print("socket closed")
 
     CLI_req_headerlines, CLI_req_, CLI_req_body = CLI_socket.recv(4096).partition(b'\r\n\r\n')
-
     CLI_req_headerlines = CLI_req_headerlines.decode("utf-8").split("\r\n")
 
     request_count += 1
@@ -47,6 +47,9 @@ def handle_client(CLI_socket, CLI_addr):
     print(f"[CLI connected to {client_ip}:{client_port}]")
 
     CLI_req_header = parse_header(CLI_req_headerlines)
+
+    print("parsed CLI request header: \n" + str(CLI_req_header))
+
     print("[CLI ==> PRX --- SRV]")
     print("  > %s" % (CLI_req_headerlines[0]))
     print("  > %s" % (CLI_req_header['User-Agent'].splitlines()[0]))
@@ -83,55 +86,68 @@ def handle_client(CLI_socket, CLI_addr):
     print("  > %s" % (CLI_req_header['User-Agent'].splitlines()[0]))
 
     print("[CLI --- PRX <== SRV]")
-    SRV_recv = SRV_socket.recv(4096)
-    SRV_res_headerlines, _, SRV_recv_body =  SRV_recv.partition(b'\r\n\r\n')
+
+    SRV_res = b''
+
+    while True:
+        try:
+            chunk = SRV_socket.recv(4069)
+            if not chunk:
+                break
+            SRV_res += chunk
+
+        except socket.error:
+            break
+
+    SRV_res_headerlines, SRV_res_, SRV_recv_body = SRV_res.partition(b'\r\n\r\n')
 
     SRV_res_headerlines = SRV_res_headerlines.decode('utf-8').split("\r\n")
     SRV_res_headers = parse_header(SRV_res_headerlines)
 
     print("headers received: " + str(SRV_res_headers))
 
-    SRV_res_status = (SRV_res_headerlines[0].split(" ")[1], SRV_res_headerlines[0].split(" ")[2])
-    print("  > %s %s" % (SRV_res_status[0], SRV_res_status[1]))
-    print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], (len(SRV_recv_body) if SRV_recv_body else "0")))
+    # print("for debugging, html body: " + SRV_recv_body.decode("utf-8"))
+
+    # SRV_res_header_line1 = SRV_res_headerlines[0].split(" ")
+    # SRV_res_status = ''
+    # for i in range(len(SRV_res_header_line1) - 1):
+    #     if (i != 0):
+    #         SRV_res_status += " "
+    #     SRV_res_status += SRV_res_header_line1[i]
+    SRV_res_status = SRV_res_headerlines[0]
+    print("  > %s" % (SRV_res_status))
+    print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], (SRV_res_headers['Content-Length'] if SRV_res_headers['Content-Length'] else "0")))
 
     notFoundFlag = False
     print("[CLI <== PRX --- SRV]")
     # self.path = parsed_url.geturl()
     if (imgFlag and SRV_res_headers["Content-Type"] == "image/jpeg"):
-        CLI_res_status = ('404', 'Not Found')
-        CLI_res_str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n".encode("utf-8")
+        CLI_res_status = "404 Not Found"
+        CLI_res_str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n".encode("utf-8") + SRV_res_
         notFoundFlag = True
     else:
-        CLI_res_status = SRV_res_status
+        if (len(SRV_recv_body) == SRV_res_headers["Content-Length"]):
+            CLI_res_status  = "200 OK"
+        else:
+            CLI_res_status = SRV_res_status
         CLI_res_str = SRV_res_headerlines[0]
+        # if (SRV_res_headers["Content-Type"][0:5] == "image"):
+        #     CLI_res_header = {
+        #         "Content-Type" : SRV_res_headers["Content-Type"] 
+        #     }
+        # else:
         CLI_res_header = SRV_res_headers
-        CLI_res_header['Connection'] = 'close'
-        # CLI_res_header['Content-Length'] = (len(SRV_recv_body) if SRV_recv_body else 0)
-        CLI_res_header['Content-Length'] = SRV_res_headers['Content-Length']
-
-        # CLI_re{
-        #     'Connection' : 'close',
-        #     'Content-Type' : SRV_res_headers['Content-Type'],
-        #     'Content-Length' : (len(SRV_recv_body) if SRV_recv_body else "0")
-        # }
         if (imgFlag):
             CLI_res_header['Content-Security-Policy'] =  "default-src 'self'; img-src ;"
         for key, value in CLI_res_header.items():
             CLI_res_str += f"{key}: {value}\r\n"
         CLI_res_str += "\r\n"
         CLI_res_str = CLI_res_str.encode("utf-8")
-        CLI_res_str += SRV_recv_body
-    CLI_socket.send(CLI_res_str)
+        CLI_res_str += SRV_res_ + SRV_recv_body
+    CLI_socket.sendall(CLI_res_str)
 
-    # self.send_header('Connection', 'close')
-    # if (imgFlag and parsed_url.path.endswith(('.html', '.htm'))):
-    #     # self.send_header('Content-Security-Policy', "default-src 'self'; img-src ;")
-    #     self.send_header('Content-Type', 'text/html')
-    # self.end_headers()
-    # if (not notFoundFlag):
-    #     self.wfile.write(SRV_res.read())
-    print("  > %s %s" % (CLI_res_status[0], CLI_res_status[1]))
+
+    print("  > %s" % (CLI_res_status))
     if (not notFoundFlag): 
         print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], (len(SRV_recv_body) if SRV_recv_body else "0")))
 
