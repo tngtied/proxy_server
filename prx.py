@@ -5,6 +5,7 @@ import threading
 
 port = sys.argv[1]
 request_count = 0
+imgFlag = [ False ]
 
 def parse_header(req_lines):
     header = {}
@@ -13,8 +14,6 @@ def parse_header(req_lines):
         if (len(header_parts) > 1):
             header[header_parts[0]] = header_parts[1]
     return header
-
-imgFlag = [ False ]
 
 def handle_client(CLI_socket, CLI_addr):
     global imgFlag, request_count
@@ -26,7 +25,6 @@ def handle_client(CLI_socket, CLI_addr):
 
     request_count += 1
     print("-----------------------------------------------")
-
     korFlag = False
     CLI_req_path = CLI_req_headerlines[0].split(' ')[1]
     parsed_url = urlparse(CLI_req_path)
@@ -36,7 +34,7 @@ def handle_client(CLI_socket, CLI_addr):
 
     if (parsed_url.query == "image_off"):
         imgFlag[0] = True
-    elif (parsed_url.query == "image_on"):
+    if (parsed_url.query == "image_on"):
         imgFlag[0] = False
 
     print("%d [%c] Redirected [%c] Image filter" % (request_count, ("O" if korFlag else "X"), ("O" if imgFlag[0] else "X")))
@@ -86,7 +84,11 @@ def handle_client(CLI_socket, CLI_addr):
     SRV_res_headers = parse_header(SRV_res_headerlines)
     SRV_res_status = SRV_res_headerlines[0]
     print("  > %s" % (SRV_res_status))
-    print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], (SRV_res_headers['Content-Length'] if SRV_res_headers['Content-Length'] else "0")))
+    if ('Content-Length' in SRV_req_headers.keys()):
+        Content_Length =  SRV_res_headers['Content-Length']
+    else:
+        Content_Length = len(SRV_recv_body)
+    print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], Content_Length))
 
     print("[CLI <== PRX --- SRV]")
     notFoundFlag = False
@@ -96,7 +98,7 @@ def handle_client(CLI_socket, CLI_addr):
         notFoundFlag = True
     else:
         if ("Content-Length" in SRV_req_headers.keys() and len(SRV_recv_body) == SRV_res_headers["Content-Length"]):
-            CLI_res_status  = "200 OK"
+            CLI_res_status = "200 OK"
         else:
             CLI_res_status = SRV_res_status
         CLI_res_str = SRV_res_headerlines[0]
@@ -111,7 +113,7 @@ def handle_client(CLI_socket, CLI_addr):
     CLI_socket.sendall(CLI_res_str)
     print("  > %s" % (CLI_res_status))
     if (not notFoundFlag): 
-        print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], (len(SRV_recv_body) if SRV_recv_body else "0")))
+        print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], Content_Length))
 
     CLI_socket.close()
     print("[CLI disconnected]")
@@ -130,7 +132,10 @@ def run_proxy_server():
             client_handler = threading.Thread(target=handle_client, args=(client_socket, addr))
             client_handler.start()
         except KeyboardInterrupt:
-            client_socket.close()
+            try:
+                client_socket.close()
+            except UnboundLocalError:
+                pass
             break
     server.close()
 
