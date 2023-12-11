@@ -2,10 +2,8 @@ import sys
 import socket
 from urllib.parse import urlparse
 import threading
-import zlib
 
-port = int(sys.argv[1])
-imgFlag = False
+port = 9001
 request_count = 0
 
 def parse_header(req_lines):
@@ -16,6 +14,7 @@ def parse_header(req_lines):
             header[header_parts[0]] = header_parts[1]
     return header
 
+imgFlag = [ False ]
 
 def handle_client(CLI_socket, CLI_addr):
     global imgFlag, request_count
@@ -38,11 +37,13 @@ def handle_client(CLI_socket, CLI_addr):
         parsed_url = urlparse(CLI_req_path)
 
     if (parsed_url.query == "image_off"):
-        imgFlag = True
+        imgFlag[0] = True
     elif (parsed_url.query == "image_on"):
-        imgFlag = False
+        imgFlag[0] = False
 
-    print("%d [%c] Redirected [%c] Image filter" % (request_count, ("O" if korFlag else "X"), ("O" if imgFlag else "X")))
+    print(f"imgflag is {imgFlag[0]}")
+
+    print("%d [%c] Redirected [%c] Image filter" % (request_count, ("O" if korFlag else "X"), ("O" if imgFlag[0] else "X")))
     client_ip, client_port = CLI_addr
     print(f"[CLI connected to {client_ip}:{client_port}]")
 
@@ -62,12 +63,6 @@ def handle_client(CLI_socket, CLI_addr):
     print(f"[SRV connected to {SRV_addr[0]}:{SRV_addr[1]}]")
 
     print("[CLI --- PRX ==> SRV]")
-    # SRV_req_headers = CLI_req_header
-    # SRV_req_headers.pop('Accept-Encoding')
-    # SRV_req_headers["Connection"] = "close"
-    
-    # print("SRV req headers:\n" + str(SRV_req_headers))
-    
     SRV_req_headers = {
         "Host" : CLI_req_header["Host"],
         'Accept-Language': CLI_req_header['Accept-Language'],
@@ -116,17 +111,17 @@ def handle_client(CLI_socket, CLI_addr):
     #     SRV_res_status += SRV_res_header_line1[i]
     SRV_res_status = SRV_res_headerlines[0]
     print("  > %s" % (SRV_res_status))
-    print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], (SRV_res_headers['Content-Length'] if SRV_res_headers['Content-Length'] else "0")))
+    # print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], (SRV_res_headers['Content-Length'] if SRV_res_headers['Content-Length'] else "0")))
 
     notFoundFlag = False
     print("[CLI <== PRX --- SRV]")
     # self.path = parsed_url.geturl()
-    if (imgFlag and SRV_res_headers["Content-Type"] == "image/jpeg"):
+    if (imgFlag[0] and SRV_res_headers["Content-Type"][0:5] == "image"):
         CLI_res_status = "404 Not Found"
         CLI_res_str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n".encode("utf-8") + SRV_res_
         notFoundFlag = True
     else:
-        if (len(SRV_recv_body) == SRV_res_headers["Content-Length"]):
+        if ("Content-Length" in SRV_req_headers.keys() and len(SRV_recv_body) == SRV_res_headers["Content-Length"]):
             CLI_res_status  = "200 OK"
         else:
             CLI_res_status = SRV_res_status
@@ -137,13 +132,13 @@ def handle_client(CLI_socket, CLI_addr):
         #     }
         # else:
         CLI_res_header = SRV_res_headers
-        if (imgFlag):
+        if (imgFlag[0]):
             CLI_res_header['Content-Security-Policy'] =  "default-src 'self'; img-src ;"
         for key, value in CLI_res_header.items():
             CLI_res_str += f"{key}: {value}\r\n"
         CLI_res_str += "\r\n"
         CLI_res_str = CLI_res_str.encode("utf-8")
-        CLI_res_str += SRV_res_ + SRV_recv_body
+        CLI_res_str +=  SRV_recv_body
     CLI_socket.sendall(CLI_res_str)
 
 
