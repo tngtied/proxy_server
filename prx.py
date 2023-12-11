@@ -15,10 +15,10 @@ def parse_header(req_lines):
             header[header_parts[0]] = header_parts[1]
     return header
 
-def handle_client(CLI_socket, CLI_addr):
+def handle_client(CLI_conn, CLI_addr):
     global imgFlag, request_count
     try:
-        CLI_req_headerlines, CLI_req_, CLI_req_body = CLI_socket.recv(4096).partition(b'\r\n\r\n')
+        CLI_req_headerlines, CLI_req_, CLI_req_body = CLI_conn.recv(4096).partition(b'\r\n\r\n')
     except (OSError, KeyboardInterrupt) as e:
         return
     CLI_req_headerlines = CLI_req_headerlines.decode("utf-8").split("\r\n")
@@ -97,10 +97,7 @@ def handle_client(CLI_socket, CLI_addr):
         CLI_res_str = "HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n".encode("utf-8") + SRV_res_
         notFoundFlag = True
     else:
-        if ("Content-Length" in SRV_req_headers.keys() and len(SRV_recv_body) == SRV_res_headers["Content-Length"]):
-            CLI_res_status = "200 OK"
-        else:
-            CLI_res_status = SRV_res_status
+        CLI_res_status = SRV_res_status
         CLI_res_str = SRV_res_headerlines[0]
         CLI_res_header = SRV_res_headers
         if (imgFlag[0]):
@@ -109,13 +106,13 @@ def handle_client(CLI_socket, CLI_addr):
             CLI_res_str += f"{key}: {value}\r\n"
         CLI_res_str += "\r\n"
         CLI_res_str = CLI_res_str.encode("utf-8")
-        CLI_res_str +=  SRV_recv_body
-    CLI_socket.sendall(CLI_res_str)
+        CLI_res_str += SRV_recv_body
+    CLI_conn.sendall(CLI_res_str)
     print("  > %s" % (CLI_res_status))
     if (not notFoundFlag): 
         print("  > %s %sbytes" % (SRV_res_headers['Content-Type'], Content_Length))
 
-    CLI_socket.close()
+    CLI_conn.close()
     print("[CLI disconnected]")
     SRV_socket.close()
     print("[SRV disconnected]")
@@ -128,12 +125,12 @@ def run_proxy_server():
     print("Starting proxy server on port %d" % port)
     while True:
         try: 
-            client_socket, addr = server.accept()
-            client_handler = threading.Thread(target=handle_client, args=(client_socket, addr))
+            client_conn, addr = server.accept()
+            client_handler = threading.Thread(target=handle_client, args=(client_conn, addr))
             client_handler.start()
         except KeyboardInterrupt:
             try:
-                client_socket.close()
+                client_conn.close()
             except UnboundLocalError:
                 pass
             break
