@@ -29,12 +29,10 @@ def handle_client(CLI_socket, CLI_addr):
 
     korFlag = False
     CLI_req_path = CLI_req_headerlines[0].split(' ')[1]
-
+    parsed_url = urlparse(CLI_req_path)
     if ("korea" in CLI_req_path):
         korFlag = True
         parsed_url = urlparse("http://mnet.yonsei.ac.kr/")
-    else:
-        parsed_url = urlparse(CLI_req_path)
 
     if (parsed_url.query == "image_off"):
         imgFlag[0] = True
