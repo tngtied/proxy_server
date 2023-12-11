@@ -82,7 +82,6 @@ def handle_client(CLI_socket, CLI_addr):
         except socket.error:
             break
     SRV_res_headerlines, SRV_res_, SRV_recv_body = SRV_res.partition(b'\r\n\r\n')
-    print(SRV_res_headerlines)
     SRV_res_headerlines = SRV_res_headerlines.decode('utf-8').split("\r\n")
     SRV_res_headers = parse_header(SRV_res_headerlines)
     SRV_res_status = SRV_res_headerlines[0]
