@@ -3,7 +3,7 @@ import socket
 from urllib.parse import urlparse
 import threading
 
-port = 9001
+port = sys.argv[1]
 request_count = 0
 
 def parse_header(req_lines):
@@ -57,12 +57,13 @@ def handle_client(CLI_socket, CLI_addr):
     print("[CLI --- PRX ==> SRV]")
     SRV_req_headers = {
         "Host" : CLI_req_header["Host"],
-        'Accept-Language': CLI_req_header['Accept-Language'],
         'GET' : parsed_url.path,
         "Connection" : "close",
         "User-Agent" : CLI_req_header['User-Agent'],
         'Accept': CLI_req_header['Accept']
     }
+    if ('Accept-Language' in SRV_req_headers.keys()):
+        SRV_req_headers['Accept-Language']: CLI_req_header['Accept-Language']
     SRV_req_str = f"GET {parsed_url.path} HTTP/1.1\r\n"
     for key, value in SRV_req_headers.items():
         SRV_req_str += f"{key}: {value}\r\n"
@@ -83,6 +84,7 @@ def handle_client(CLI_socket, CLI_addr):
         except socket.error:
             break
     SRV_res_headerlines, SRV_res_, SRV_recv_body = SRV_res.partition(b'\r\n\r\n')
+    print(SRV_res_headerlines)
     SRV_res_headerlines = SRV_res_headerlines.decode('utf-8').split("\r\n")
     SRV_res_headers = parse_header(SRV_res_headerlines)
     SRV_res_status = SRV_res_headerlines[0]
