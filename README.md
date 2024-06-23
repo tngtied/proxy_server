@@ -18,3 +18,8 @@ http 통신에 있어서 작동하는 포워드 프록시 서버를 개발했습
 
 <img width="629" alt="2024-01-19_6 57 00" src="https://github.com/tngtied/proxy_server/assets/75424805/fa69c522-9de0-466b-8bf4-71dc71642504">
 <img width="747" alt="2024-01-19_6 57 16" src="https://github.com/tngtied/proxy_server/assets/75424805/8b4a8248-8454-44f5-bf50-900083fd1311">
+
+3. 이미지를 허용하는 쿼리를 첨가했을 때 이미지 전송이 허용되는 기능
+
+<img width="737" alt="2024-01-19_6 57 42" src="https://github.com/tngtied/proxy_server/assets/75424805/0c650ae5-459a-46e3-9c36-dc43ab4b7b15">
+<img width="707" alt="2024-01-19_8 12 11" src="https://github.com/tngtied/proxy_server/assets/75424805/156747c4-89d4-474d-9212-13f09b58cd5a">
